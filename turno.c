@@ -130,8 +130,10 @@ int simular_turno(Mapa *mapa, Nivel *nivel, Coordenada posiciones_ataque[], int 
 }
 
 void inicializar_turno(Nivel *nivel, Mapa *mapa, DisposicionTorres colocar_torres) {
-    colocar_torres(nivel, mapa);
-    
+    if(colocar_torres != NULL) {
+        colocar_torres(nivel, mapa);
+    }
+
     // posicion inicial
     nivel->enemigos->posiciones[0].x = 0;
     nivel->enemigos->posiciones[0].y = 0;
