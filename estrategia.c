@@ -54,76 +54,63 @@ void disponer(Nivel* nivel, Mapa* mapa) {
     }
 }
 
-void disponer_con_backtracking(Nivel* nivel, Mapa* mapa) {
-	int totalCasillas = mapa->alto * mapa->ancho;
-	Coordenada posValidas[totalCasillas];
-	int cantValidas = posiciones_validas(posValidas, mapa->casillas, mapa->alto, mapa->ancho);
+void disponer_con_backtracking(Nivel* nivel_original, Mapa* mapa_original) {
+    int totalCasillas = mapa_original->alto * mapa_original->ancho;
+    Coordenada posValidas[totalCasillas];
+    int cantValidas = posiciones_validas(posValidas, mapa_original->casillas, mapa_original->alto, mapa_original->ancho);
 
-	// Crear la pila con capacidad para todas las casillas
-	Pila* pila = pila_crear(totalCasillas);
+    // Crear la pila con capacidad para todas las torres permitidas
+    Pila* pila = pila_crear(mapa_original->cant_torres);
+    int torres_colocadas = 0; // Contador de torres colocadas
 
-	// Inicializar el primer nivel con índice -1 para que al incrementarlo se pruebe desde 0.
-	Estado init;
-	init.indice = -1;
-	pila_apilar(pila, init);
+    // Copiar el estado inicial del nivel y el mapa
+    Nivel nivel_copia = *nivel_original;
+    Mapa mapa_copia = *mapa_original;
 
-	while (!pila_esta_vacia(pila)) {
-    	// El nivel actual es igual a la cantidad de decisiones (torres) colocadas = (pila->tope + 1).
-    	int nivelActual = pila->tope; // Índice de la última decisión en la pila.
-   	 
-    	// Desapila el estado del nivel actual y prueba el siguiente candidato.
-    	Estado actual = pila_desapilar(pila);
-    	actual.indice++;  // Probar la siguiente opción
+    // Inicializar la pila con un estado vacío
+    Estado inicial = {.indice = -1};
+    pila_apilar(pila, inicial);
 
-    	// Asegurar que para niveles > 0 la elección sea mayor que la anterior (para evitar repeticiones)
-    	if (nivelActual > 0) {
-        	int indicePrevio = pila->datos[nivelActual - 1].indice;
-        	if (actual.indice < indicePrevio + 1)
-            	actual.indice = indicePrevio + 1;
-    	}
+    while (!pila_esta_vacia(pila)) {
+        Estado actual = pila_desapilar(pila);
 
-    	if (actual.indice >= cantValidas) {
-        	// No hay más candidatos en este nivel, así que retrocedemos.
-        	if (nivelActual == 0)
-            	break;  // Se han agotado todas las combinaciones.
-       	 
-        	// Eliminar la torre que había sido colocada en el nivel anterior.
-        	int indiceRemovido = pila->datos[nivelActual - 1].indice;
-        	Coordenada posRem = posValidas[indiceRemovido];
-        	mapa->casillas[posRem.x][posRem.y] = VACIO;
-        	// Continuamos (no empujamos ningún Estado nuevo) para probar el siguiente candidato en este nivel.
-        	continue;
-    	}
-   	 
-    	// Se encontró un candidato válido. Empujamos el estado actualizado para el nivel actual.
-    	pila_apilar(pila, actual);
-   	 
-    	// Colocar provisionalmente la torre para este nivel.
-    	Coordenada pos = posValidas[actual.indice];
-    	colocar_torre(mapa, pos.x, pos.y, nivelActual);
-   	 
-    	// Si la cantidad de torres colocadas es la requerida, evaluamos la configuración.
-    	if (pila->tope + 1 == mapa->cant_torres) {
-        	if (simular_nivel(nivel, mapa, NULL)) {
-            	printf("Configuracion valida encontrada:\n");
-            	mostrar_mapa(mapa, nivel->enemigos);
-            	break;
-        	} else {
-            	// La configuración fue rechazada: se retira la torre colocada y se sigue probando.
-            	int indiceRemovido = pila->datos[pila->tope].indice;
-            	Coordenada posRem = posValidas[indiceRemovido];
-            	mapa->casillas[posRem.x][posRem.y] = VACIO;
-            	pila_desapilar(pila);
-        	}
-    	} else {
-        	// Aún faltan torres por colocar: iniciar el siguiente nivel con Estado inicial (-1)
-        	Estado nuevo;
-        	nuevo.indice = -1;
-        	pila_apilar(pila, nuevo);
-    	}
-	}
-    
-	pila_destruir(pila);
+        // Intentar avanzar al siguiente índice
+        actual.indice++;
+        if (actual.indice < cantValidas) {
+            Coordenada pos = posValidas[actual.indice];
+            colocar_torre(&mapa_copia, pos.x, pos.y, torres_colocadas);
+            pila_apilar(pila, actual);
+            torres_colocadas++;
+
+            // Evaluar si colocamos todas las torres
+            if (torres_colocadas == mapa_original->cant_torres) {
+                // Restaurar el estado inicial antes de simular
+                *nivel_original = nivel_copia;
+                *mapa_original = mapa_copia;
+
+                if (simular_nivel(nivel_original, mapa_original, NULL)) {
+                    printf("Configuración válida encontrada:\n");
+                    mostrar_mapa(mapa_original, nivel_original->enemigos);
+                }
+
+                // Quitar la última torre colocada para seguir explorando
+                Coordenada ultima_pos = posValidas[actual.indice];
+                mapa_copia.casillas[ultima_pos.x][ultima_pos.y] = VACIO;
+                torres_colocadas--;
+            } else {
+                // Avanzar al siguiente nivel
+                Estado siguiente = {.indice = -1};
+                pila_apilar(pila, siguiente);
+            }
+        } else if (torres_colocadas > 0) {
+            // Retroceso: quitar la última torre colocada
+            Coordenada ultima_pos = posValidas[pila->datos[pila->tope].indice];
+            mapa_copia.casillas[ultima_pos.x][ultima_pos.y] = VACIO;
+            torres_colocadas--;
+        }
+    }
+
+    pila_destruir(pila);
 }
 
 void disponer_custom(Nivel* nivel, Mapa* mapa) {
