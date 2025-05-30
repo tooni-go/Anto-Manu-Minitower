@@ -119,3 +119,37 @@ void mostrar_mapa(Mapa *mapa, Enemigos *enemigos) {
     printf("  Enemigos vivos: %d\n", enemigos->cantidad_activos);
     printf("  Vida inicial: %d\n\n", enemigos->vida_inicial);
 }
+
+void mostrar_cords_mapa (Mapa* mapa, Enemigos* enemigos){
+    limpiar_pantalla();
+    printf("  ");
+    for(int xd=0; xd < mapa->ancho; xd++){
+        printf("  %d",xd);
+    }
+
+    printf("\n  ");
+   imprimir_borde_horizontal(mapa->ancho, 1);
+
+    for (int x = 0; x < mapa->alto; x++) {
+        printf("%d ║",x);
+        for (int y = 0; y < mapa->ancho; y++) {
+            TipoCasilla c = mapa->casillas[x][y];
+            Coordenada coord;
+            coord.x = x;
+            coord.y = y;
+            if (c == ENEMIGO) {
+                int indice_enemigo = buscarEnemigo(enemigos->posiciones, enemigos->cantidad, coord);
+                int vida = enemigos->vida[indice_enemigo];
+                imprimir_casilla(c, vida, enemigos->vida_inicial);
+            } else if(c == VACIO){
+                imprimir_casilla(c,0,enemigos->vida_inicial);
+            }else{
+                imprimir_casilla(c, 0, enemigos->vida_inicial);
+            }
+        }
+        printf("║\n");
+    }
+    printf("  ");
+    imprimir_borde_horizontal(mapa->ancho, 0);
+    printf("\n\n");
+}

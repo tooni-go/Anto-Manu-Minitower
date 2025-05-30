@@ -1,6 +1,7 @@
 #include "estrategia.h"
 #include "pila.c"
 #include "simulador.h"
+#include "mapa.h"
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
@@ -54,82 +55,72 @@ void disponer(Nivel* nivel, Mapa* mapa) {
     }
 }
 
-void disponer_con_backtracking(Nivel* nivel_original, Mapa* mapa_original) {
-    int totalCasillas = mapa_original->alto * mapa_original->ancho;
-    Coordenada posValidas[totalCasillas];
-    int cantValidas = posiciones_validas(posValidas, mapa_original->casillas, mapa_original->alto, mapa_original->ancho);
+int encontrar_soluciones(Nivel* nivel, Mapa* mapa, Coordenada* posiciones_validas, int cant_validas, int torres_colocadas, int max_torres, int i_inicio) { 
+    // Caso base: solución válida
+    if (torres_colocadas == max_torres) {
+        if (simular_nivel(nivel, mapa, NULL)) {
+            printf("Configuración válida encontrada:\n");
+            mostrar_mapa(mapa, nivel->enemigos);
+            return 1; // Solución encontrada
+        }
+        return 0; // Solución no encontrada
+    }
 
-    // Crear la pila con capacidad para todas las torres permitidas
-    Pila* pila = pila_crear(mapa_original->cant_torres);
-    int torres_colocadas = 0; // Contador de torres colocadas
+    // Explorar todas las opciones desde `i_inicio` para evitar redundancias
+    for (int i = i_inicio; i < cant_validas; i++) {
+        Coordenada pos = posiciones_validas[i];
 
-    // Copiar el estado inicial del nivel y el mapa
-    Nivel nivel_copia = *nivel_original;
-    Mapa mapa_copia = *mapa_original;
+        // Validar que la casilla esté vacía
+        if (mapa->casillas[pos.x][pos.y] == VACIO) {
+            // Aplicar la elección
+            colocar_torre(mapa, pos.x, pos.y, torres_colocadas);
 
-    // Inicializar la pila con un estado vacío
-    Estado inicial = {.indice = -1};
-    pila_apilar(pila, inicial);
-
-    while (!pila_esta_vacia(pila)) {
-        Estado actual = pila_desapilar(pila);
-
-        // Intentar avanzar al siguiente índice
-        actual.indice++;
-        if (actual.indice < cantValidas) {
-            Coordenada pos = posValidas[actual.indice];
-            colocar_torre(&mapa_copia, pos.x, pos.y, torres_colocadas);
-            pila_apilar(pila, actual);
-            torres_colocadas++;
-
-            // Evaluar si colocamos todas las torres
-            if (torres_colocadas == mapa_original->cant_torres) {
-                // Restaurar el estado inicial antes de simular
-                *nivel_original = nivel_copia;
-                *mapa_original = mapa_copia;
-
-                if (simular_nivel(nivel_original, mapa_original, NULL)) {
-                    printf("Configuración válida encontrada:\n");
-                    mostrar_mapa(mapa_original, nivel_original->enemigos);
-                }
-
-                // Quitar la última torre colocada para seguir explorando
-                Coordenada ultima_pos = posValidas[actual.indice];
-                mapa_copia.casillas[ultima_pos.x][ultima_pos.y] = VACIO;
-                torres_colocadas--;
-            } else {
-                // Avanzar al siguiente nivel
-                Estado siguiente = {.indice = -1};
-                pila_apilar(pila, siguiente);
+            // Recursión con siguiente torre
+            if (encontrar_soluciones(nivel, mapa, posiciones_validas, cant_validas, torres_colocadas + 1, max_torres, i + 1)) {
+                return 1; // Solución encontrada en una rama
             }
-        } else if (torres_colocadas > 0) {
-            // Retroceso: quitar la última torre colocada
-            Coordenada ultima_pos = posValidas[pila->datos[pila->tope].indice];
-            mapa_copia.casillas[ultima_pos.x][ultima_pos.y] = VACIO;
-            torres_colocadas--;
+
+            // Retroceso
+            mapa->casillas[pos.x][pos.y] = VACIO;
         }
     }
 
-    pila_destruir(pila);
+    return 0; // No se encontró solución en esta rama
 }
+
+void disponer_con_backtracking(Nivel* nivel, Mapa* mapa) {
+    // Determinar las posiciones válidas
+    int total_casillas = mapa->alto * mapa->ancho;
+    Coordenada posiciones_validas_torre[total_casillas];
+    int cant_validas = posiciones_validas(posiciones_validas_torre, mapa->casillas, mapa->alto, mapa->ancho);
+
+    if (cant_validas <= 0) {
+        printf("Error: No hay posiciones válidas para torres.\n");
+        return;
+    }
+
+    // Iniciar backtracking con índice inicial `0`
+    if (!encontrar_soluciones(nivel, mapa, posiciones_validas_torre, cant_validas, 0, mapa->cant_torres, 0)) {
+        printf("No se encontró una configuración válida.\n");
+    }
+}
+
+
 
 void disponer_custom(Nivel* nivel, Mapa* mapa) {
     int cantidad_casillas = mapa->alto * mapa->ancho;
     Coordenada posiciones_validas_torre[cantidad_casillas];
-    int casilla_elegida[cantidad_casillas];
-    for(int i = 0; i < cantidad_casillas; casilla_elegida[i++] = 0);
 
     int cant_validas = posiciones_validas(posiciones_validas_torre, mapa->casillas, mapa->alto, mapa->ancho);
-    
     for (int colocadas = 0; colocadas < mapa->cant_torres; ) {
+        mostrar_cords_mapa(mapa, nivel->enemigos);
         int cordenada_x, cordenada_y;
-        printf("Coloca la torre %d:\n", colocadas + 1);
-        printf("Las cordenadas comienzan desde 0\n\n");
+        printf("Coloca la torre %d en cualquier posicion alrededor del camino:\n", colocadas + 1);
         printf("Ingresa coordenada X: ");
-        scanf("%d", &cordenada_x);
-        printf("Ingresa coordenada Y: ");
         scanf("%d", &cordenada_y);
-        if (cordenada_x < 0 || cordenada_x >= mapa->ancho || cordenada_y < 0 || cordenada_y >= mapa->alto) {
+        printf("Ingresa coordenada Y: ");
+        scanf("%d", &cordenada_x);
+        if (cordenada_x < 0 || cordenada_x > mapa->ancho || cordenada_y < 0 || cordenada_y > mapa->alto) {
             printf("Coordenada fuera de los límites del mapa. Intenta de nuevo.\n\n");
             continue;
         }
@@ -148,6 +139,6 @@ void disponer_custom(Nivel* nivel, Mapa* mapa) {
         colocadas++;
         printf("Torre colocada en (%d, %d).\n\n", cordenada_x, cordenada_y);
     }
+    return;
 }
-
 
